@@ -22,6 +22,8 @@ _RULE_PATTERNS: list[tuple[Intent, list[str]]] = [
     (Intent.FRAUD_CLAIM, [
         "unauthorized", "didn't make", "did not make", "didnt make", "stolen",
         "fraud", "hacked", "someone charged", "not my charge",
+        "don't recognize", "do not recognize", "dont recognize",
+        "unrecognized", "never authorized",
     ]),
     (Intent.LEGAL_THREAT, [
         "lawyer", "attorney", "sue ", "suing", "legal action", "lawsuit",

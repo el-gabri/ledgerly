@@ -36,6 +36,8 @@ _INTENT_PATTERNS: list[tuple[Intent, list[str]]] = [
     (Intent.FRAUD_CLAIM, [
         "unauthorized", "didn't make", "did not make", "didnt make", "stolen",
         "fraud", "hacked", "someone charged", "not my charge", "never made",
+        "don't recognize", "do not recognize", "dont recognize",
+        "unrecognized", "never authorized",
     ]),
     (Intent.LEGAL_THREAT, [
         "lawyer", "attorney", "sue ", "suing", "legal action", "lawsuit",
@@ -55,7 +57,7 @@ _INTENT_PATTERNS: list[tuple[Intent, list[str]]] = [
     ]),
     (Intent.BILLING, [
         "fee", "charged twice", "charge", "refund", "invoice", "billing",
-        "overcharg", "double charg",
+        "overcharg", "double charg", "dispute",
     ]),
     (Intent.HOW_TO, [
         "how do i", "how to", "how can i", "where do i", "reset my password",

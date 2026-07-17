@@ -14,6 +14,21 @@ def test_fraud_claim_goes_straight_to_human(conversation):
     assert seq[-1] == "HUMAN_ACTIVE"
 
 
+def test_unrecognized_purchase_is_a_fraud_claim(conversation):
+    """Regression: 'I don't recognize a purchase' must hit the fraud rule,
+    not drift to the vendor as an unknown intent."""
+    state = conversation("I don't recognize a purchase")
+    assert state["current_intent"] == "fraud_claim"
+    assert state["human_active"] is True
+    assert state["escalation"].trigger == "restricted_intent"
+
+
+def test_dispute_routes_as_billing(conversation):
+    state = conversation("I want to dispute a transaction")
+    assert state["current_intent"] == "billing"
+    assert state["conv_state"] == "RESPONDED"
+
+
 def test_explicit_human_request_is_honored(conversation):
     state = conversation("I want to speak to a real person")
     assert state["human_active"] is True

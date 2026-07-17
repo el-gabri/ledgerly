@@ -11,6 +11,29 @@ import uuid
 from langgraph.checkpoint.memory import MemorySaver
 from langgraph.graph import END, START, StateGraph
 
+
+def _make_checkpointer() -> MemorySaver:
+    """Checkpointer with our state dataclasses explicitly allow-listed.
+
+    Newer langgraph versions warn (and will eventually refuse) when
+    deserializing unregistered types from checkpoints. Registering them is
+    the supported path; older versions without the parameter fall back to
+    the default serializer.
+    """
+    try:
+        from langgraph.checkpoint.serde.jsonplus import JsonPlusSerializer
+
+        serde = JsonPlusSerializer(allowed_msgpack_modules=[
+            ("ledgerly.state", "Message"),
+            ("ledgerly.state", "TransitionEvent"),
+            ("ledgerly.state", "DraftReply"),
+            ("ledgerly.state", "VendorFailure"),
+            ("ledgerly.state", "Escalation"),
+        ])
+        return MemorySaver(serde=serde)
+    except (ImportError, TypeError):  # older langgraph: no allowlist support
+        return MemorySaver()
+
 from .agents.account import AccountAgent, make_account_node
 from .agents.kb import KnowledgeBaseAgent, make_kb_node
 from .agents.vendor import MockVendorLLM, VendorAdapter, make_vendor_node, route_after_vendor
@@ -113,7 +136,7 @@ def build_app(backend: LLMBackend | None = None,
     builder.add_edge("escalate", END)
     builder.add_edge("human_hold", END)
 
-    return builder.compile(checkpointer=MemorySaver())
+    return builder.compile(checkpointer=_make_checkpointer())
 
 
 def run_turn(app, conversation_id: str, text: str, chaos: str | None = None) -> dict:
