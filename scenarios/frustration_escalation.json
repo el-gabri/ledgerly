@@ -1,0 +1,7 @@
+{
+  "name": "Frustrated user: escalation to human with context package",
+  "turns": [
+    {"text": "My payment is not working"},
+    {"text": "This is ridiculous, it's still not working"}
+  ]
+}

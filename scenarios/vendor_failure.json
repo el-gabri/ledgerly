@@ -1,0 +1,7 @@
+{
+  "name": "Vendor timeout mid-conversation: graceful fallback to internal KB agent",
+  "turns": [
+    {"text": "How do I reset my password?"},
+    {"text": "How do I close my account?", "chaos": "vendor_timeout"}
+  ]
+}

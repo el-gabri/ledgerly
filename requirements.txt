@@ -1,0 +1,9 @@
+# Core
+langgraph>=0.2
+pytest>=8
+
+# Optional: real LLM mode (LEDGERLY_LLM_MODE=openai)
+openai>=1.40
+
+# Optional: dense-embedding retrieval (LEDGERLY_EMBEDDINGS=st)
+sentence-transformers>=3

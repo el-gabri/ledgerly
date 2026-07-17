@@ -1,0 +1,8 @@
+{
+  "name": "Happy path: three intents, three agents, no escalation",
+  "turns": [
+    {"text": "How do I reset my password?"},
+    {"text": "What are the transfer limits?"},
+    {"text": "What's my current balance?"}
+  ]
+}

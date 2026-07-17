@@ -1,0 +1,13 @@
+{
+  "user_id": "demo_user",
+  "name": "Alex Demo",
+  "currency": "USD",
+  "balance": "1,284.50",
+  "card": {"last4": "4821", "status": "active"},
+  "recent_transactions": [
+    {"date": "2026-07-15", "description": "Grocery Mart", "amount": "-62.10", "status": "settled"},
+    {"date": "2026-07-14", "description": "Transfer to Sam R.", "amount": "-200.00", "status": "settled"},
+    {"date": "2026-07-12", "description": "Salary deposit", "amount": "+2,150.00", "status": "settled"},
+    {"date": "2026-07-11", "description": "CoffeeCo subscription", "amount": "-14.99", "status": "pending"}
+  ]
+}

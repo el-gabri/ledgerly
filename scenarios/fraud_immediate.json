@@ -1,0 +1,6 @@
+{
+  "name": "Restricted intent: fraud claim routed straight to human, no AI reply",
+  "turns": [
+    {"text": "There's a charge on my card I didn't make"}
+  ]
+}
