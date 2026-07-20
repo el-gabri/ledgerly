@@ -19,7 +19,9 @@ def test_vendor_timeout_falls_back_to_kb(conversation):
 
 def test_vendor_failure_with_weak_fallback_escalates(conversation):
     """Vendor fails AND the fallback can't answer confidently -> human."""
-    state = conversation("blargh nonsense gibberish", chaos="vendor_timeout")
+    # A how-to question the KB corpus can't answer: vendor times out, the KB
+    # fallback retrieves nothing useful, so the turn escalates.
+    state = conversation("How do I do the thing with the stuff?", chaos="vendor_timeout")
     assert state["human_active"] is True
     assert state["escalation"].trigger == "vendor_exhausted"
 

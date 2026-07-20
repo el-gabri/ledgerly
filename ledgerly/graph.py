@@ -35,6 +35,7 @@ def _make_checkpointer() -> MemorySaver:
         return MemorySaver()
 
 from .agents.account import AccountAgent, make_account_node
+from .agents.concierge import concierge_node
 from .agents.kb import KnowledgeBaseAgent, make_kb_node
 from .agents.vendor import MockVendorLLM, VendorAdapter, make_vendor_node, route_after_vendor
 from .gate import gate_node, route_after_gate
@@ -113,6 +114,7 @@ def build_app(backend: LLMBackend | None = None,
     builder.add_node("vendor", make_vendor_node(vendor_adapter))
     builder.add_node("kb", make_kb_node(kb_agent))
     builder.add_node("account", make_account_node(account_agent))
+    builder.add_node("concierge", concierge_node)
     builder.add_node("fallback", _fallback_node)
     builder.add_node("gate", gate_node)
     builder.add_node("respond", _respond_node)
@@ -124,12 +126,14 @@ def build_app(backend: LLMBackend | None = None,
                                   {"router": "router", "human_hold": "human_hold"})
     builder.add_conditional_edges("router", route_after_router,
                                   {"vendor": "vendor", "kb": "kb",
-                                   "account": "account", "escalate": "escalate"})
+                                   "account": "account", "concierge": "concierge",
+                                   "escalate": "escalate"})
     builder.add_conditional_edges("vendor", route_after_vendor,
                                   {"fallback": "fallback", "gate": "gate"})
     builder.add_edge("fallback", "kb")
     builder.add_edge("kb", "gate")
     builder.add_edge("account", "gate")
+    builder.add_edge("concierge", "gate")
     builder.add_conditional_edges("gate", route_after_gate,
                                   {"respond": "respond", "escalate": "escalate"})
     builder.add_edge("respond", END)

@@ -34,15 +34,17 @@ _RULE_PATTERNS: list[tuple[Intent, list[str]]] = [
     ]),
 ]
 
-#: Which agent serves which intent. UNKNOWN goes to the vendor: it is the
-#: generalist; the specialists only receive traffic they can actually serve.
+#: Which agent serves which intent. GREETING and UNKNOWN stay inside the
+#: orchestrator (concierge): a greeting doesn't warrant a vendor call, and an
+#: unclear message gets a capability menu instead of a hedge.
 _INTENT_TO_AGENT = {
     Intent.ACCOUNT: "account",
     Intent.PRODUCT: "kb",
     Intent.BILLING: "vendor",
     Intent.HOW_TO: "vendor",
     Intent.COMPLAINT: "vendor",
-    Intent.UNKNOWN: "vendor",
+    Intent.GREETING: "concierge",
+    Intent.UNKNOWN: "concierge",
 }
 
 

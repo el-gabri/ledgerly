@@ -73,6 +73,14 @@ _INTENT_PATTERNS: list[tuple[Intent, list[str]]] = [
     ]),
 ]
 
+# Greetings need word-boundary matching ("hi" must not fire inside "this"),
+# so they use a regex instead of the substring patterns above. Checked only
+# after every substantive pattern misses: "Hi, I was charged twice" is a
+# billing question, not small talk.
+_GREETING_RE = re.compile(
+    r"\b(hi|hello|hey|howdy|greetings|good\s+(morning|afternoon|evening))\b"
+)
+
 _FRUSTRATION_MARKERS = [
     "frustrated", "frustrating", "angry", "furious", "ridiculous", "useless",
     "terrible", "awful", "worst", "fed up", "waste of time", "not working",
@@ -98,6 +106,8 @@ class OfflineBackend:
         for intent, patterns in _INTENT_PATTERNS:
             if any(p in lowered for p in patterns):
                 return intent
+        if _GREETING_RE.search(lowered):
+            return Intent.GREETING
         return Intent.UNKNOWN
 
     def generate(self, system: str, prompt: str, fallback: str) -> str:

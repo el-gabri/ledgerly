@@ -39,6 +39,7 @@ class Intent(str, Enum):
     HUMAN_REQUEST = "human_request"
     FRAUD_CLAIM = "fraud_claim"
     LEGAL_THREAT = "legal_threat"
+    GREETING = "greeting"
     UNKNOWN = "unknown"
 
 
