@@ -1,0 +1,22 @@
+flowchart TD
+    U([User message]) --> IN["Intake<br/>turn++, reset per-turn state"]
+    IN -->|human owns the conversation| HH(["Human hold<br/>AI muted, message logged"])
+    IN -->|otherwise| R{"Intent Router<br/>rules first, then classifier"}
+
+    R -->|fraud claim or legal threat<br/>deterministic rule, pre-AI| E
+    R -->|user asks for a human| E
+    R -->|billing, how-to, complaint| V["Vendor AI agent<br/>sees redacted projection only"]
+    R -->|product question| K["KB agent<br/>RAG over support docs"]
+    R -->|account question| A["Account agent<br/>internal data, never shared with vendor"]
+    R -->|greeting or unclear| C["Concierge<br/>hello / capability menu"]
+
+    V -->|reply + confidence| G
+    V -->|timeout or failure| F["Fallback<br/>mark vendor attempt failed"]
+    F --> K
+    K --> G{"Response Gate<br/>ordered escalation triggers"}
+    A --> G
+    C --> G
+
+    G -->|no trigger fired| OUT([Reply delivered to user])
+    G -->|trigger fired| E["Escalate<br/>build context package"]
+    E --> H(["Human agent takes over<br/>summary, transcript, attempts, next actions"])

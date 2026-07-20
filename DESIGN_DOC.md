@@ -24,6 +24,8 @@ flowchart TD
     R -->|billing, how-to| V[Vendor AI Agent<br/><i>adapter + mock impl</i>]
     R -->|product/policy question| K[Internal KB Agent<br/><i>RAG over support docs</i>]
     R -->|account-specific| A[Internal Account Agent<br/><i>mock account data</i>]
+    R -->|greeting / unclear| C[Concierge<br/><i>hello / capability menu</i>]
+    C --> G
     V -->|ok| G[Response Gate]
     K --> G
     A --> G
