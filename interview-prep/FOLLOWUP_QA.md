@@ -32,7 +32,7 @@ Production: an LLM or fine-tuned classifier does the semantic work — but the *
 
 ## 5. "Why did you mock the vendor instead of calling a real API? / Is this just a toy?"
 
-"Three deliberate reasons. First, failure injection: a real vendor never lets you trigger a timeout on demand, and the degradation path was the most important thing to demonstrate. Second, determinism: 32 tests that always pass beat a flashier demo that fails when the WiFi does. Third, honesty about scope: one week, solo, alongside a full-time job — I spent the budget on the orchestration layer because that's what this role owns. The `VendorAdapter` interface is shaped from real Bedrock/Vertex invocation patterns, so the mock is a stand-in, not a dead end — and `LEDGERLY_LLM_MODE=openai` already runs the same graph on real inference."
+"Three deliberate reasons. First, failure injection: a real vendor never lets you trigger a timeout on demand, and the degradation path was the most important thing to demonstrate. Second, determinism: an offline suite that always passes beats a flashier demo that fails when the WiFi does. Third, honesty about scope: one week, solo, alongside a full-time job — I spent the budget on the orchestration layer because that's what this role owns. The `VendorAdapter` interface is shaped from real Bedrock/Vertex invocation patterns, so the mock is a stand-in, not a dead end — and `LEDGERLY_LLM_MODE=openai` already runs the same graph on real inference."
 
 ## 6. "How would you measure whether this orchestration layer is actually good?"
 

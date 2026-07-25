@@ -10,7 +10,14 @@ import json
 from pathlib import Path
 
 from ..logging_utils import log_event
-from ..state import ConvState, DraftReply, OrchestratorState, last_user_message, transition
+from ..state import (
+    AgentAttempt,
+    ConvState,
+    DraftReply,
+    OrchestratorState,
+    last_user_message,
+    transition,
+)
 
 _FIXTURES = Path(__file__).resolve().parent.parent.parent / "data" / "accounts.json"
 
@@ -65,6 +72,16 @@ def make_account_node(agent: AccountAgent):
                        "account agent produced a draft reply"),
         ]
         log_event("account_reply", state, confidence=draft.confidence)
-        return {"conv_state": ConvState.GATING.value, "events": events, "draft": draft}
+        return {
+            "conv_state": ConvState.GATING.value,
+            "events": events,
+            "draft": draft,
+            "agent_attempts": [AgentAttempt(
+                agent=draft.agent,
+                outcome="reply",
+                confidence=draft.confidence,
+                citations=draft.citations,
+            )],
+        }
 
     return account_node

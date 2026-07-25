@@ -17,6 +17,9 @@ LOW_CONFIDENCE_STREAK_LIMIT = 2
 FRUSTRATION_LIMIT = 2
 #: Maximum user turns before the conversation escalates as unresolved.
 TURN_LIMIT = 8
+#: A shorter draft cannot be a useful support answer, regardless of a vendor's
+#: self-reported confidence.
+MIN_RESPONSE_CHARACTERS = 12
 
 # --- KB retrieval ----------------------------------------------------------
 #: Number of documents retrieved per query.

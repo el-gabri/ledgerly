@@ -29,13 +29,16 @@ def test_offline_classification(text, expected):
         ("There's a charge I didn't make", Intent.FRAUD_CLAIM),
         ("My card was stolen", Intent.FRAUD_CLAIM),
         ("I will contact my lawyer about this", Intent.LEGAL_THREAT),
+        ("I will sue.", Intent.LEGAL_THREAT),
+        ("Não reconheço esta cobrança", Intent.FRAUD_CLAIM),
+        ("Quero falar com um atendente", Intent.HUMAN_REQUEST),
         ("Let me talk to a human please", Intent.HUMAN_REQUEST),
         ("How do I reset my password?", None),  # no rule fires; model decides
     ],
 )
 def test_rule_layer(text, expected):
     """Restricted intents and human requests are rule decisions, not model ones."""
-    assert _apply_rules(text) is expected or _apply_rules(text) == expected
+    assert _apply_rules(text) is expected
 
 
 def test_account_question_routes_to_account_agent(conversation):
@@ -49,7 +52,7 @@ def test_product_question_routes_to_kb_agent(conversation):
     state = conversation("What are the transfer limits?")
     assert state["current_intent"] == "product"
     assert state["messages"][-1].agent == "kb"
-    assert "transfer-limits" in state["draft"].citations
+    assert state["draft"].citations == ["transfer-limits"]
 
 
 def test_howto_question_routes_to_vendor(conversation):

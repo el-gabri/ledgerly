@@ -1,14 +1,9 @@
 """Shared fixtures. All tests run in offline mode: deterministic, no network."""
 from __future__ import annotations
 
-import sys
-from pathlib import Path
-
 import pytest
 
-sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
-
-from ledgerly.graph import build_app, new_conversation_id, run_turn  # noqa: E402
+from ledgerly.graph import build_app, new_conversation_id, run_turn
 
 
 @pytest.fixture()

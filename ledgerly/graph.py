@@ -27,6 +27,7 @@ def _make_checkpointer() -> MemorySaver:
             ("ledgerly.state", "Message"),
             ("ledgerly.state", "TransitionEvent"),
             ("ledgerly.state", "DraftReply"),
+            ("ledgerly.state", "AgentAttempt"),
             ("ledgerly.state", "VendorFailure"),
             ("ledgerly.state", "Escalation"),
         ])

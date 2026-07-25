@@ -12,6 +12,10 @@ from .logging_utils import log_event
 from .state import ConvState, Escalation, Message, OrchestratorState, transition
 
 _SUGGESTED_ACTIONS = {
+    "invalid_response": [
+        "The AI response failed a basic integrity check; do not rely on it",
+        "Answer the customer's original question from the transcript",
+    ],
     "restricted_intent": [
         "Verify the customer's identity before discussing the claim",
         "Follow the fraud/legal escalation runbook",
@@ -47,10 +51,16 @@ def build_package(state: OrchestratorState, trigger: str, reason: str,
         {"role": m.role, "agent": m.agent, "content": m.content}
         for m in state.get("messages", [])
     ]
-    attempts = [
-        {"agent": s.agent, "confidence": s.confidence}
-        for s in ([state["draft"]] if state.get("draft") else [])
-    ]
+    attempts = []
+    for attempt in state.get("agent_attempts", []):
+        item = {"agent": attempt.agent, "outcome": attempt.outcome}
+        if attempt.confidence is not None:
+            item["confidence"] = attempt.confidence
+        if attempt.citations:
+            item["citations"] = attempt.citations
+        if attempt.failure_kind:
+            item["failure_kind"] = attempt.failure_kind
+        attempts.append(item)
     intents = state.get("intent_history", [])
 
     fallback_summary = (

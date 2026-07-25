@@ -12,7 +12,7 @@ Two cases live here, both cheap and deterministic:
 from __future__ import annotations
 
 from ..logging_utils import log_event
-from ..state import ConvState, DraftReply, Intent, OrchestratorState, transition
+from ..state import AgentAttempt, ConvState, DraftReply, Intent, OrchestratorState, transition
 
 _GREETING_REPLY = (
     "Hi! Welcome to Ledgerly support — happy to help. "
@@ -46,4 +46,13 @@ def concierge_node(state: OrchestratorState) -> dict:
     ]
     log_event("concierge_reply", state, intent=state.get("current_intent"),
               confidence=draft.confidence)
-    return {"conv_state": ConvState.GATING.value, "events": events, "draft": draft}
+    return {
+        "conv_state": ConvState.GATING.value,
+        "events": events,
+        "draft": draft,
+        "agent_attempts": [AgentAttempt(
+            agent=draft.agent,
+            outcome="reply",
+            confidence=draft.confidence,
+        )],
+    }

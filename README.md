@@ -17,7 +17,7 @@ fictional digital-wallet app; no real company data or systems are involved.
   moves between agents as the user's need shifts.
 - **Shared state and context passing** — one typed conversation state flows
   through every node; the vendor receives only a redacted projection (never
-  account data).
+  account data or common PII pasted into the chat).
 - **An explicit conversation state machine** — every transition is recorded
   with a reason (`/trace` shows it live).
 - **Graceful vendor degradation** — inject a vendor timeout mid-conversation
@@ -34,7 +34,7 @@ fictional digital-wallet app; no real company data or systems are involved.
 ```bash
 python -m venv .venv && source .venv/bin/activate   # Windows: .venv\Scripts\activate
 pip install -r requirements.txt
-python -m pytest tests -q          # 32 tests, all offline/deterministic
+python -m pytest tests -q          # deterministic, offline test suite
 
 # Scripted demos
 python -m ledgerly.cli --scenario scenarios/happy_path.json

@@ -9,6 +9,7 @@ from __future__ import annotations
 
 from .llm import LLMBackend, detect_frustration
 from .logging_utils import log_event
+from .policy import apply_policy_rules
 from .state import (
     RESTRICTED_INTENTS,
     ConvState,
@@ -17,22 +18,6 @@ from .state import (
     last_user_message,
     transition,
 )
-
-_RULE_PATTERNS: list[tuple[Intent, list[str]]] = [
-    (Intent.FRAUD_CLAIM, [
-        "unauthorized", "didn't make", "did not make", "didnt make", "stolen",
-        "fraud", "hacked", "someone charged", "not my charge",
-        "don't recognize", "do not recognize", "dont recognize",
-        "unrecognized", "never authorized",
-    ]),
-    (Intent.LEGAL_THREAT, [
-        "lawyer", "attorney", "sue ", "suing", "legal action", "lawsuit",
-    ]),
-    (Intent.HUMAN_REQUEST, [
-        "human", "real person", "real agent", "representative",
-        "speak to someone", "talk to someone", "speak to a person",
-    ]),
-]
 
 #: Which agent serves which intent. GREETING and UNKNOWN stay inside the
 #: orchestrator (concierge): a greeting doesn't warrant a vendor call, and an
@@ -49,12 +34,8 @@ _INTENT_TO_AGENT = {
 
 
 def _apply_rules(text: str) -> Intent | None:
-    """Deterministic pre-classification. Returns None if no rule matches."""
-    lowered = text.lower()
-    for intent, patterns in _RULE_PATTERNS:
-        if any(p in lowered for p in patterns):
-            return intent
-    return None
+    """Backward-compatible entry point for deterministic policy matching."""
+    return apply_policy_rules(text)
 
 
 def make_router_node(backend: LLMBackend):

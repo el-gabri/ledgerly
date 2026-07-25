@@ -2,6 +2,26 @@
 from __future__ import annotations
 
 from conftest import states_visited
+from ledgerly.agents.vendor import build_projection
+from ledgerly.state import Message
+
+
+def test_vendor_projection_redacts_pii():
+    projection = build_projection({
+        "current_intent": "billing",
+        "messages": [Message(
+            role="user",
+            content=("My email is alex@example.com; card 4242 4242 4242 4242; "
+                     "CPF 123.456.789-00; phone +55 11 99876-1234"),
+        )],
+    })
+
+    content = projection.transcript[0]["content"]
+    assert "alex@example.com" not in content
+    assert "4242 4242 4242 4242" not in content
+    assert "123.456.789-00" not in content
+    assert "99876-1234" not in content
+    assert projection.redaction_types == ["card_number", "cpf", "email", "phone"]
 
 
 def test_vendor_timeout_falls_back_to_kb(conversation):
@@ -24,6 +44,10 @@ def test_vendor_failure_with_weak_fallback_escalates(conversation):
     state = conversation("How do I do the thing with the stuff?", chaos="vendor_timeout")
     assert state["human_active"] is True
     assert state["escalation"].trigger == "vendor_exhausted"
+    assert state["escalation"].package["agents_attempted"] == [
+        {"agent": "mock_vendor_llm", "outcome": "failure", "failure_kind": "timeout"},
+        {"agent": "kb", "outcome": "reply", "confidence": 0.30},
+    ]
 
 
 def test_vendor_low_confidence_counts_toward_streak(conversation):

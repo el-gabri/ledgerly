@@ -15,11 +15,13 @@ from __future__ import annotations
 
 from abc import ABC, abstractmethod
 from dataclasses import dataclass, field
+import re
 from typing import Optional
 
 from ..llm import LLMBackend
 from ..logging_utils import log_event
 from ..state import (
+    AgentAttempt,
     ConvState,
     DraftReply,
     Intent,
@@ -36,6 +38,7 @@ class VendorProjection:
 
     transcript: list[dict] = field(default_factory=list)  # [{role, content}]
     intent: str = "unknown"
+    redaction_types: list[str] = field(default_factory=list)
 
 
 @dataclass
@@ -84,6 +87,53 @@ _UNKNOWN_TEMPLATE = (
 )
 
 
+# This is a defensive outbound boundary, not an identity system. It removes
+# common high-risk values a customer may paste into a message before that
+# message leaves Ledgerly. New vendor integrations must use this projection
+# rather than the graph state directly.
+_CARD_NUMBER_RE = re.compile(r"(?<![\d+])(?:\d[ -]?){13,19}(?!\d)")
+_PII_PATTERNS: tuple[tuple[str, re.Pattern[str]], ...] = (
+    ("cpf", re.compile(r"(?<!\d)\d{3}\.?\d{3}\.?\d{3}-?\d{2}(?!\d)")),
+    ("email", re.compile(r"\b[A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,}\b", re.IGNORECASE)),
+    ("phone", re.compile(
+        r"(?<!\d)(?:\+?\d{1,3}[ .-]?)?(?:\(?\d{2,3}\)?[ .-]?)?\d{4,5}[ .-]\d{4}(?!\d)"
+    )),
+)
+
+
+def _passes_luhn(digits: str) -> bool:
+    """Avoid classifying phone numbers as card numbers in audit metadata."""
+    total = 0
+    for index, digit in enumerate(reversed(digits)):
+        value = int(digit)
+        if index % 2:
+            value *= 2
+            if value > 9:
+                value -= 9
+        total += value
+    return total % 10 == 0
+
+
+def redact_pii(text: str) -> tuple[str, list[str]]:
+    """Replace common PII in vendor-bound text and report safe type labels."""
+    redacted = text
+    found: list[str] = []
+
+    def redact_card(match: re.Match[str]) -> str:
+        digits = re.sub(r"\D", "", match.group())
+        if _passes_luhn(digits):
+            found.append("card_number")
+            return "[REDACTED_CARD_NUMBER]"
+        return match.group()
+
+    redacted = _CARD_NUMBER_RE.sub(redact_card, redacted)
+    for pii_type, pattern in _PII_PATTERNS:
+        if pattern.search(redacted):
+            found.append(pii_type)
+            redacted = pattern.sub(f"[REDACTED_{pii_type.upper()}]", redacted)
+    return redacted, found
+
+
 class MockVendorLLM(VendorAdapter):
     """Simulates a third-party support LLM.
 
@@ -127,12 +177,19 @@ class MockVendorLLM(VendorAdapter):
 
 def build_projection(state: OrchestratorState) -> VendorProjection:
     """Redact graph state down to what the vendor is allowed to see."""
-    transcript = [
-        {"role": m.role, "content": m.content}
-        for m in state.get("messages", [])
-        if m.role in ("user", "assistant")
-    ]
-    return VendorProjection(transcript=transcript, intent=state.get("current_intent", "unknown"))
+    transcript: list[dict] = []
+    redaction_types: set[str] = set()
+    for message in state.get("messages", []):
+        if message.role not in ("user", "assistant"):
+            continue
+        content, found = redact_pii(message.content)
+        transcript.append({"role": message.role, "content": content})
+        redaction_types.update(found)
+    return VendorProjection(
+        transcript=transcript,
+        intent=state.get("current_intent", "unknown"),
+        redaction_types=sorted(redaction_types),
+    )
 
 
 def make_vendor_node(adapter: VendorAdapter):
@@ -143,6 +200,7 @@ def make_vendor_node(adapter: VendorAdapter):
         projection = build_projection(state)
         log_event("vendor_invoked", state, adapter=adapter.name,
                   redacted_fields=["account_data", "retrieval_context", "orchestration_metadata"],
+                  pii_redaction_types=projection.redaction_types,
                   chaos=chaos)
 
         result = adapter.invoke(projection, chaos=chaos)
@@ -158,6 +216,11 @@ def make_vendor_node(adapter: VendorAdapter):
                 "conv_state": ConvState.FALLBACK.value,
                 "events": events,
                 "vendor_failure": result.failure,
+                "agent_attempts": [AgentAttempt(
+                    agent=adapter.name,
+                    outcome="failure",
+                    failure_kind=result.failure.kind,
+                )],
                 "chaos": None,  # knob is consumed either way
             }
 
@@ -169,6 +232,11 @@ def make_vendor_node(adapter: VendorAdapter):
             "events": events,
             "draft": DraftReply(agent=adapter.name, content=result.content,
                                 confidence=result.confidence),
+            "agent_attempts": [AgentAttempt(
+                agent=adapter.name,
+                outcome="reply",
+                confidence=result.confidence,
+            )],
             "chaos": None,
         }
 

@@ -13,6 +13,7 @@ from typing import Protocol
 
 from .config import llm_mode, openai_model
 from .logging_utils import log_event
+from .policy import apply_policy_rules
 from .state import Intent
 
 
@@ -30,22 +31,9 @@ class LLMBackend(Protocol):
 # Offline backend: keyword rules, deterministic, zero dependencies.
 # ---------------------------------------------------------------------------
 
-# Ordered list: first matching intent wins. Restricted intents come first so
-# no later pattern can shadow them.
+# Ordered list: first matching intent wins. Policy-critical intents are
+# deliberately absent: they are owned by ``policy.py`` and run first.
 _INTENT_PATTERNS: list[tuple[Intent, list[str]]] = [
-    (Intent.FRAUD_CLAIM, [
-        "unauthorized", "didn't make", "did not make", "didnt make", "stolen",
-        "fraud", "hacked", "someone charged", "not my charge", "never made",
-        "don't recognize", "do not recognize", "dont recognize",
-        "unrecognized", "never authorized",
-    ]),
-    (Intent.LEGAL_THREAT, [
-        "lawyer", "attorney", "sue ", "suing", "legal action", "lawsuit",
-    ]),
-    (Intent.HUMAN_REQUEST, [
-        "human", "real person", "real agent", "representative",
-        "speak to someone", "talk to someone", "speak to a person",
-    ]),
     # Task-shaped phrases that would otherwise be shadowed by the possessive
     # ACCOUNT patterns below ("close MY ACCOUNT" is a how-to, not a lookup).
     (Intent.HOW_TO, [
@@ -102,6 +90,9 @@ class OfflineBackend:
     name = "offline"
 
     def classify_intent(self, text: str) -> Intent:
+        policy_intent = apply_policy_rules(text)
+        if policy_intent:
+            return policy_intent
         lowered = text.lower()
         for intent, patterns in _INTENT_PATTERNS:
             if any(p in lowered for p in patterns):

@@ -35,8 +35,9 @@ The point of a prototype is to prove the seams, not to fake the scale.
 ## 4. The state schema is a contract, not a convenience
 
 `state.py` is the one shared surface between all agents. Agents read shared
-state but write only their own fields; the vendor gets a redacted projection,
-never the raw state. Changing `state.py` is a design review, not a diff —
+state but write only their own fields; the vendor gets a redacted,
+PII-scrubbed projection, never the raw state. Changing `state.py` is a design
+review, not a diff —
 in a real team this file would have mandatory codeowner review.
 
 ## 5. Degrade, never crash a conversation

@@ -1,9 +1,4 @@
-# Core
-langgraph>=0.2
-pytest>=8
-
-# Optional: real LLM mode (LEDGERLY_LLM_MODE=openai)
-openai>=1.40
-
-# Optional: dense-embedding retrieval (LEDGERLY_EMBEDDINGS=st)
-sentence-transformers>=3
+# Convenience install for local development and the deterministic test suite.
+# Optional OpenAI and sentence-transformer integrations are exposed as package
+# extras so offline users do not download them unnecessarily.
+-e .[dev]

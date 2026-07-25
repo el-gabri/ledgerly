@@ -40,7 +40,7 @@ flowchart TD
 **Components**
 
 - **Intent Router** — classifies each turn into an intent (billing, how-to, account-specific, complaint, restricted-topic) and dispatches. LLM-based classifier with a rule layer on top: certain intents (fraud claim, legal threat, self-harm) bypass all AI and route straight to human. Rules beat model — deterministic guardrails are cheaper to audit than prompts.
-- **Vendor AI Agent** — sits behind a `VendorAdapter` interface (`invoke(state) -> VendorResponse | VendorFailure`). v1 ships one mock implementation with configurable latency, confidence score, and failure injection; the interface is shaped so a Bedrock or Vertex adapter is a drop-in.
+- **Vendor AI Agent** — sits behind a `VendorAdapter` interface (`invoke(state) -> VendorResponse | VendorFailure`). v1 ships one mock implementation with configurable latency, confidence score, and failure injection; the interface is shaped so a Bedrock or Vertex adapter is a drop-in. The adapter receives a PII-scrubbed projection, never raw graph state.
 - **Internal KB Agent** — RAG over ~15 fictional support docs: embed, retrieve top-k, answer with citations, report retrieval confidence. (Same retrieval pattern as embedding+FAISS product-matching systems, applied to support docs.)
 - **Internal Account Agent** — answers account-specific questions from mock account fixtures; demonstrates that internal agents can hold tools/data the vendor must never see.
 - **Response Gate** — every candidate reply passes one checkpoint that evaluates escalation triggers before anything reaches the user. Single choke point → single place to audit.
@@ -66,7 +66,7 @@ Every transition is appended to an event log (`conversation_id`, `from_state`, `
 
 One typed `ConversationState` (Pydantic) flows through the graph. Key fields: `messages` (full transcript), `current_intent` + history, `active_agent`, `retrieval_context` (KB citations), `confidence_signals` (per-agent scores), `escalation` (trigger, reason, package), `turn_count`, `sentiment_flags`.
 
-Two rules: **(1) agents read the shared state but write only their own namespaced section** — no agent mutates another's output; **(2) the vendor adapter receives a redacted projection** (transcript + intent only, never account data). The contract is versioned; changing it is a design review, not a diff.
+Two rules: **(1) agents read the shared state but write only their own namespaced section** — no agent mutates another's output; **(2) the vendor adapter receives a redacted projection** (transcript + intent only, never account data); common PII in the transcript is scrubbed before egress. The contract is versioned; changing it is a design review, not a diff.
 
 ## 5. Routing and escalation
 
@@ -75,12 +75,13 @@ Two rules: **(1) agents read the shared state but write only their own namespace
 **Escalation triggers (explicit, ordered):**
 
 1. Restricted intent matched by rule (immediate, pre-AI).
-2. Vendor failure after one internal fallback attempt.
-3. Agent confidence below threshold twice in a row.
-4. User frustration signal (sentiment flag or explicit "let me talk to a person").
-5. Turn count exceeds limit without resolution.
+2. Candidate response fails a deterministic integrity check (empty or too short).
+3. Vendor failure after one internal fallback attempt.
+4. Agent confidence below threshold twice in a row.
+5. User frustration signal (sentiment flag or explicit "let me talk to a person").
+6. Turn count exceeds limit without resolution.
 
-**Handoff context package:** conversation summary (auto-generated), full transcript, intents seen, agents attempted with their confidence scores, trigger that fired, and suggested next actions. The human starts warm, not from zero — this is the metric that matters (no repeat-yourself handoffs).
+**Handoff context package:** conversation summary (auto-generated), full transcript, intents seen, durable history of agents attempted (including failures, confidence scores, and citations), trigger that fired, and suggested next actions. The human starts warm, not from zero — this is the metric that matters (no repeat-yourself handoffs).
 
 ## 6. Observability
 

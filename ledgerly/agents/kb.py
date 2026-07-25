@@ -16,7 +16,14 @@ from pathlib import Path
 from ..config import KB_TOP_K, KB_WEAK_SCORE, embeddings_mode
 from ..llm import LLMBackend
 from ..logging_utils import log_event
-from ..state import ConvState, DraftReply, OrchestratorState, last_user_message, transition
+from ..state import (
+    AgentAttempt,
+    ConvState,
+    DraftReply,
+    OrchestratorState,
+    last_user_message,
+    transition,
+)
 
 _DATA_DIR = Path(__file__).resolve().parent.parent.parent / "data" / "kb_docs"
 
@@ -100,14 +107,16 @@ class KnowledgeBaseAgent:
 
         content = self._backend.generate(
             system=("You are Ledgerly's internal support assistant. Answer ONLY "
-                    "from the provided articles; if they don't cover the "
-                    "question, say so. Cite the article you used."),
-            prompt=f"Question: {query}\n\nArticles:\n{doc}",
+                    "from the provided article; if it doesn't cover the "
+                    "question, say so. Cite the article ID in your answer."),
+            prompt=f"Question: {query}\n\nArticle ID: {top_id}\n\nArticle:\n{doc}",
             fallback=f"{fallback}\n\n(Source: {top_id})",
         )
         confidence = min(0.9, 0.55 + top_score)
+        # The generator receives only ``top_id``. Do not claim citations for
+        # retrieval candidates it has never seen or used in its answer.
         return DraftReply(agent=self.name, content=content, confidence=confidence,
-                          citations=[doc_id for doc_id, _ in hits])
+                          citations=[top_id])
 
 
 class _SentenceTransformerIndex:
@@ -142,6 +151,16 @@ def make_kb_node(agent: KnowledgeBaseAgent):
         ]
         log_event("kb_reply", state, confidence=draft.confidence,
                   citations=draft.citations, as_fallback=state.get("fallback_attempted", False))
-        return {"conv_state": ConvState.GATING.value, "events": events, "draft": draft}
+        return {
+            "conv_state": ConvState.GATING.value,
+            "events": events,
+            "draft": draft,
+            "agent_attempts": [AgentAttempt(
+                agent=draft.agent,
+                outcome="reply",
+                confidence=draft.confidence,
+                citations=draft.citations,
+            )],
+        }
 
     return kb_node

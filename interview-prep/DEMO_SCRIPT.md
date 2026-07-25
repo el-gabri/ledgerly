@@ -52,7 +52,7 @@ python -m ledgerly.cli --scenario scenarios/frustration_escalation.json --show-p
 python -m pytest tests -q
 ```
 
-- **"32 tests, all deterministic — the LLM is opt-in behind a flag, which is why the state machine and routing logic are actually testable. Design doc was written before the code; the state table in it is asserted by these tests. And every simplification — mock vendor, TF-IDF retrieval, in-memory checkpointing — sits behind an interface shaped like the production component: Bedrock adapter, embeddings + vector store, Redis/Postgres checkpointer."**
+- **"The deterministic offline suite — the LLM is opt-in behind a flag, which is why the state machine and routing logic are actually testable. Design doc was written before the code; the state table in it is asserted by these tests. And every simplification — mock vendor, TF-IDF retrieval, in-memory checkpointing — sits behind an interface shaped like the production component: Bedrock adapter, embeddings + vector store, Redis/Postgres checkpointer."**
 
 Then stop talking and let them ask questions — the follow-up doc covers the likely ones.
 

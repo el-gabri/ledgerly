@@ -33,10 +33,11 @@ flowchart TD
 
 **Response Gate triggers, evaluated in order (first match wins):**
 
-1. `vendor_exhausted` — vendor failed and the internal fallback is weak too
-2. `low_confidence` — two consecutive replies below the confidence threshold
-3. `user_frustration` — two frustration signals across the conversation
-4. `turn_limit` — conversation exceeded the turn budget unresolved
+1. `invalid_response` — the candidate is empty or too short, regardless of self-reported confidence
+2. `vendor_exhausted` — vendor failed and the internal fallback is weak too
+3. `low_confidence` — two consecutive replies below the confidence threshold
+4. `user_frustration` — two frustration signals across the conversation
+5. `turn_limit` — conversation exceeded the turn budget unresolved
 
 (Restricted intents and explicit human requests escalate at the router,
 before any AI agent runs — they never reach the gate.)

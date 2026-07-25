@@ -23,6 +23,14 @@ def test_unrecognized_purchase_is_a_fraud_claim(conversation):
     assert state["escalation"].trigger == "restricted_intent"
 
 
+def test_portuguese_fraud_claim_goes_straight_to_human(conversation):
+    """Accent-insensitive policy rules protect multilingual customers too."""
+    state = conversation("Não reconheço esta cobrança")
+    assert state["current_intent"] == "fraud_claim"
+    assert state["human_active"] is True
+    assert "AGENT_ACTIVE" not in states_visited(state)
+
+
 def test_dispute_routes_as_billing(conversation):
     state = conversation("I want to dispute a transaction")
     assert state["current_intent"] == "billing"
@@ -47,6 +55,19 @@ def test_context_package_contents(conversation):
     assert package["intents_seen"]  # intent history is included
     assert package["suggested_actions"]  # human gets next-step guidance
     assert all({"role", "content"} <= set(m) for m in package["transcript"])
+
+
+def test_context_package_keeps_prior_agent_attempts(conversation):
+    """A later direct handoff must retain responder work from earlier turns."""
+    conversation("How do I reset my password?")
+    state = conversation("I want to talk to a human")
+
+    attempts = state["escalation"].package["agents_attempted"]
+    assert attempts == [{
+        "agent": "mock_vendor_llm",
+        "outcome": "reply",
+        "confidence": 0.80,
+    }]
 
 
 def test_user_is_told_about_the_handoff(conversation):

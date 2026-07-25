@@ -13,10 +13,22 @@ from .config import (
     FRUSTRATION_LIMIT,
     LOW_CONFIDENCE_STREAK_LIMIT,
     LOW_CONFIDENCE_THRESHOLD,
+    MIN_RESPONSE_CHARACTERS,
     TURN_LIMIT,
 )
 from .logging_utils import log_event
 from .state import ConvState, OrchestratorState, transition
+
+
+def _invalid_draft_reason(state: OrchestratorState) -> str | None:
+    """Apply a deterministic integrity check before trusting confidence."""
+    draft = state.get("draft")
+    content = draft.content.strip() if draft else ""
+    if not content:
+        return "agent produced an empty response"
+    if len(content) < MIN_RESPONSE_CHARACTERS:
+        return f"agent response is shorter than {MIN_RESPONSE_CHARACTERS} characters"
+    return None
 
 
 def gate_node(state: OrchestratorState) -> dict:
@@ -32,8 +44,12 @@ def gate_node(state: OrchestratorState) -> dict:
     update: dict = {"low_confidence_streak": streak}
     trigger = None
 
-    # Ordered trigger evaluation — first match wins.
-    if state.get("fallback_attempted") and confidence < LOW_CONFIDENCE_THRESHOLD:
+    # Ordered trigger evaluation — first match wins. Content validity is
+    # independent of an agent's self-reported confidence.
+    invalid_reason = _invalid_draft_reason(state)
+    if invalid_reason:
+        trigger = ("invalid_response", invalid_reason)
+    elif state.get("fallback_attempted") and confidence < LOW_CONFIDENCE_THRESHOLD:
         trigger = ("vendor_exhausted",
                    "vendor failed and the internal fallback is not confident")
     elif streak >= LOW_CONFIDENCE_STREAK_LIMIT:

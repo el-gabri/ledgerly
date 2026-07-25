@@ -82,6 +82,17 @@ class DraftReply:
 
 
 @dataclass
+class AgentAttempt:
+    """An immutable record of a responder invocation for a warm handoff."""
+
+    agent: str
+    outcome: str  # "reply" | "failure"
+    confidence: Optional[float] = None
+    citations: list[str] = field(default_factory=list)
+    failure_kind: Optional[str] = None
+
+
+@dataclass
 class VendorFailure:
     """A failure reported by (or detected in) the vendor AI adapter."""
 
@@ -112,6 +123,7 @@ class OrchestratorState(TypedDict, total=False):
     messages: Annotated[list[Message], operator.add]
     events: Annotated[list[TransitionEvent], operator.add]
     intent_history: Annotated[list[str], operator.add]
+    agent_attempts: Annotated[list[AgentAttempt], operator.add]
     # -- durable conversation-level fields --------------------------------
     conv_state: str
     turn_count: int

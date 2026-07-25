@@ -1,6 +1,33 @@
 """Response Gate: escalation trigger logic."""
 from __future__ import annotations
 
+from ledgerly.agents.vendor import VendorResult
+from ledgerly.graph import build_app, new_conversation_id, run_turn
+
+
+class _OverconfidentEmptyVendor:
+    """Returns a response the gate must reject despite its confidence."""
+
+    name = "overconfident_empty_vendor"
+
+    def invoke(self, projection, chaos=None):
+        return VendorResult(ok=True, content="", confidence=0.99)
+
+
+def test_empty_vendor_response_escalates_despite_high_confidence(monkeypatch):
+    monkeypatch.setenv("LEDGERLY_LLM_MODE", "offline")
+    app = build_app(vendor_adapter=_OverconfidentEmptyVendor())
+
+    state = run_turn(app, new_conversation_id(), "How do I reset my password?")
+
+    assert state["human_active"] is True
+    assert state["escalation"].trigger == "invalid_response"
+    assert state["escalation"].package["agents_attempted"] == [{
+        "agent": "overconfident_empty_vendor",
+        "outcome": "reply",
+        "confidence": 0.99,
+    }]
+
 
 def test_frustration_escalates_on_second_signal(conversation):
     """First frustrated message gets an empathetic reply; second escalates."""
