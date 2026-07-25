@@ -32,6 +32,21 @@ _INTENT_TO_AGENT = {
     Intent.UNKNOWN: "concierge",
 }
 
+# The concierge presents these exact choices for an unclear turn. A numeric
+# reply is therefore valid context, not another unknown message.
+_MENU_SELECTIONS = {
+    "1": Intent.BILLING,
+    "2": Intent.ACCOUNT,
+    "3": Intent.HOW_TO,
+    "4": Intent.PRODUCT,
+}
+
+
+def _menu_selection_intent(state: OrchestratorState, text: str) -> Intent | None:
+    if not state.get("awaiting_menu_selection"):
+        return None
+    return _MENU_SELECTIONS.get(text.strip().rstrip(".)"))
+
 
 def _apply_rules(text: str) -> Intent | None:
     """Backward-compatible entry point for deterministic policy matching."""
@@ -47,14 +62,20 @@ def make_router_node(backend: LLMBackend):
                              "classifying user turn")]
 
         rule_intent = _apply_rules(text)
-        intent = rule_intent or backend.classify_intent(text)
-        decided_by = "rule" if rule_intent else backend.name
+        menu_intent = None if rule_intent else _menu_selection_intent(state, text)
+        intent = rule_intent or menu_intent or backend.classify_intent(text)
+        decided_by = (
+            "rule" if rule_intent else
+            "menu_selection" if menu_intent else
+            backend.name
+        )
 
         update: dict = {
             "conv_state": ConvState.ROUTING.value,
             "events": events,
             "current_intent": intent.value,
             "intent_history": [intent.value],
+            "awaiting_menu_selection": False,
         }
 
         # Frustration is tracked independently of intent: an angry message

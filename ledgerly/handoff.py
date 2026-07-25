@@ -44,13 +44,17 @@ _SUGGESTED_ACTIONS = {
 }
 
 
+def _transcript_from_state(state: OrchestratorState) -> list[dict]:
+    return [
+        {"role": message.role, "agent": message.agent, "content": message.content}
+        for message in state.get("messages", [])
+    ]
+
+
 def build_package(state: OrchestratorState, trigger: str, reason: str,
                   backend: LLMBackend) -> dict:
     """Assemble the structured context package a human agent receives."""
-    transcript = [
-        {"role": m.role, "agent": m.agent, "content": m.content}
-        for m in state.get("messages", [])
-    ]
+    transcript = _transcript_from_state(state)
     attempts = []
     for attempt in state.get("agent_attempts", []):
         item = {"agent": attempt.agent, "outcome": attempt.outcome}
@@ -120,11 +124,34 @@ def make_escalate_node(backend: LLMBackend):
 
 
 def human_hold_node(state: OrchestratorState) -> dict:
-    """Once a human owns the conversation, the orchestrator only records."""
-    log_event("human_hold", state, note="conversation owned by human agent; AI muted")
-    return {"messages": [Message(
-        role="assistant",
-        content="(A specialist is handling this conversation — your message has "
-                "been added to the case.)",
-        agent="orchestrator",
-    )]}
+    """Keep the handoff package current while the human owns the conversation."""
+    update: dict = {}
+    escalation = state.get("escalation")
+    if escalation:
+        package = dict(escalation.package)
+        prior_transcript = package.get("transcript", [])
+        transcript = _transcript_from_state(state)
+        new_messages = transcript[len(prior_transcript):]
+        package["transcript"] = transcript
+        if new_messages:
+            package["post_handoff_messages"] = [
+                *package.get("post_handoff_messages", []),
+                *new_messages,
+            ]
+        update["escalation"] = Escalation(
+            trigger=escalation.trigger,
+            reason=escalation.reason,
+            package=package,
+        )
+
+    log_event("human_hold", state, note="conversation owned by human agent; AI muted",
+              new_message_count=len(new_messages) if escalation else 0)
+    return {
+        **update,
+        "messages": [Message(
+            role="assistant",
+            content="(A specialist is handling this conversation — your message has "
+                    "been added to the case.)",
+            agent="orchestrator",
+        )],
+    }

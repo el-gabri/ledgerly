@@ -131,6 +131,7 @@ class OrchestratorState(TypedDict, total=False):
     frustration_count: int
     escalation: Optional[Escalation]
     human_active: bool
+    awaiting_menu_selection: bool
     # -- per-turn scratch fields (reset at intake) ------------------------
     current_intent: Optional[str]
     active_agent: Optional[str]

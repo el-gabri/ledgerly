@@ -41,7 +41,7 @@ _INTENT_PATTERNS: list[tuple[Intent, list[str]]] = [
     ]),
     (Intent.ACCOUNT, [
         "my balance", "balance", "my account", "my transaction", "my card",
-        "my transfer", "my payment", "my statement", "my deposit",
+        "my transfer", "my payment", "my statement", "my deposit", "wallet",
     ]),
     (Intent.BILLING, [
         "fee", "charged twice", "charge", "refund", "invoice", "billing",

@@ -33,6 +33,12 @@ def test_human_active_short_circuits_ai(conversation):
     assert len(state["events"]) == n_events
     assert state["conv_state"] == "HUMAN_ACTIVE"
     assert state["messages"][-1].agent == "orchestrator"
+    package = state["escalation"].package
+    assert package["transcript"][-1]["content"] == "hello? are you still there?"
+    assert any(
+        message["content"] == "hello? are you still there?"
+        for message in package["post_handoff_messages"]
+    )
 
 
 def test_per_turn_scratch_fields_reset(conversation):

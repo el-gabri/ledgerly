@@ -50,6 +50,7 @@ def concierge_node(state: OrchestratorState) -> dict:
         "conv_state": ConvState.GATING.value,
         "events": events,
         "draft": draft,
+        "awaiting_menu_selection": state.get("current_intent") == Intent.UNKNOWN.value,
         "agent_attempts": [AgentAttempt(
             agent=draft.agent,
             outcome="reply",

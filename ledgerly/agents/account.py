@@ -36,7 +36,7 @@ class AccountAgent:
         lowered = query.lower()
         acct = self._account
 
-        if "balance" in lowered:
+        if "balance" in lowered or "wallet" in lowered:
             content = f"Your current balance is {acct['balance']} {acct['currency']}."
         elif "transaction" in lowered or "payment" in lowered or "transfer" in lowered:
             lines = [

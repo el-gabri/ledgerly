@@ -41,6 +41,25 @@ def test_unclear_intent_gets_capability_menu(conversation):
     assert state["low_confidence_streak"] == 1
 
 
+def test_menu_selection_routes_without_an_unnecessary_handoff(conversation):
+    """A numbered answer to the displayed menu is valid user context."""
+    state = conversation("GABRIEL")
+    assert state["awaiting_menu_selection"] is True
+
+    state = conversation("1")
+    assert state["current_intent"] == "billing"
+    assert state["messages"][-1].agent == "mock_vendor_llm"
+    assert state["low_confidence_streak"] == 0
+    assert state.get("human_active") is not True
+
+
+def test_wallet_question_routes_to_account_agent(conversation):
+    state = conversation("Hi. How can I check my wallet?")
+    assert state["current_intent"] == "account"
+    assert state["messages"][-1].agent == "account"
+    assert "1,284.50" in state["messages"][-1].content
+
+
 def test_persistently_unclear_user_reaches_a_human(conversation):
     """...so two unclear turns in a row still escalate."""
     conversation("ehh the thing isn't")
