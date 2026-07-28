@@ -1,0 +1,115 @@
+"""Intent router: rule layer first, then model classification.
+
+The rule layer is deterministic and runs before any LLM: restricted intents
+(fraud claims, legal threats) and explicit human requests are policy
+decisions, and policy must be auditable — a regex you can point at beats a
+prompt you can only hope about.
+"""
+from __future__ import annotations
+
+from .llm import LLMBackend, detect_frustration
+from .logging_utils import log_event
+from .policy import apply_policy_rules
+from .state import (
+    RESTRICTED_INTENTS,
+    ConvState,
+    Intent,
+    OrchestratorState,
+    last_user_message,
+    transition,
+)
+
+#: Which agent serves which intent. GREETING and UNKNOWN stay inside the
+#: orchestrator (concierge): a greeting doesn't warrant a vendor call, and an
+#: unclear message gets a capability menu instead of a hedge.
+_INTENT_TO_AGENT = {
+    Intent.ACCOUNT: "account",
+    Intent.PRODUCT: "kb",
+    Intent.BILLING: "vendor",
+    Intent.HOW_TO: "vendor",
+    Intent.COMPLAINT: "vendor",
+    Intent.GREETING: "concierge",
+    Intent.UNKNOWN: "concierge",
+}
+
+# The concierge presents these exact choices for an unclear turn. A numeric
+# reply is therefore valid context, not another unknown message.
+_MENU_SELECTIONS = {
+    "1": Intent.BILLING,
+    "2": Intent.ACCOUNT,
+    "3": Intent.HOW_TO,
+    "4": Intent.PRODUCT,
+}
+
+
+def _menu_selection_intent(state: OrchestratorState, text: str) -> Intent | None:
+    if not state.get("awaiting_menu_selection"):
+        return None
+    return _MENU_SELECTIONS.get(text.strip().rstrip(".)"))
+
+
+def _apply_rules(text: str) -> Intent | None:
+    """Backward-compatible entry point for deterministic policy matching."""
+    return apply_policy_rules(text)
+
+
+def make_router_node(backend: LLMBackend):
+    """Build the router node bound to an LLM backend."""
+
+    def router_node(state: OrchestratorState) -> dict:
+        text = last_user_message(state)
+        events = [transition(state.get("conv_state", "INTAKE"), ConvState.ROUTING,
+                             "classifying user turn")]
+
+        rule_intent = _apply_rules(text)
+        menu_intent = None if rule_intent else _menu_selection_intent(state, text)
+        intent = rule_intent or menu_intent or backend.classify_intent(text)
+        decided_by = (
+            "rule" if rule_intent else
+            "menu_selection" if menu_intent else
+            backend.name
+        )
+
+        update: dict = {
+            "conv_state": ConvState.ROUTING.value,
+            "events": events,
+            "current_intent": intent.value,
+            "intent_history": [intent.value],
+            "awaiting_menu_selection": False,
+        }
+
+        # Frustration is tracked independently of intent: an angry message
+        # about billing is still a billing question — and a signal.
+        if detect_frustration(text):
+            update["frustration_count"] = state.get("frustration_count", 0) + 1
+
+        if intent in RESTRICTED_INTENTS:
+            update["pending_escalation"] = (
+                "restricted_intent",
+                f"'{intent.value}' is restricted: AI agents may not handle it",
+            )
+        elif intent is Intent.HUMAN_REQUEST:
+            update["pending_escalation"] = (
+                "user_requested_human",
+                "user explicitly asked for a human agent",
+            )
+        else:
+            update["active_agent"] = _INTENT_TO_AGENT[intent]
+
+        log_event(
+            "routing_decision", state,
+            intent=intent.value, decided_by=decided_by,
+            target=update.get("active_agent", "human"),
+            frustration_count=update.get("frustration_count",
+                                         state.get("frustration_count", 0)),
+        )
+        return update
+
+    return router_node
+
+
+def route_after_router(state: OrchestratorState) -> str:
+    """Conditional edge: dispatch to the chosen agent or straight to handoff."""
+    if state.get("pending_escalation"):
+        return "escalate"
+    return state["active_agent"]
