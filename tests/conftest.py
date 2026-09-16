@@ -6,10 +6,18 @@ import pytest
 from ledgerly.graph import build_app, new_conversation_id, run_turn
 
 
-@pytest.fixture()
-def app(monkeypatch):
-    """A fresh compiled graph in offline mode."""
+@pytest.fixture(autouse=True)
+def offline_environment(monkeypatch):
+    """Do not inherit optional network modes from the developer's shell."""
     monkeypatch.setenv("LEDGERLY_LLM_MODE", "offline")
+    monkeypatch.setenv("LEDGERLY_EMBEDDINGS", "tfidf")
+    monkeypatch.setenv("LANGCHAIN_TRACING_V2", "false")
+    monkeypatch.setenv("LANGSMITH_TRACING", "false")
+
+
+@pytest.fixture()
+def app():
+    """A fresh compiled graph in offline mode."""
     return build_app()
 
 

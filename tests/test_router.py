@@ -14,6 +14,11 @@ from ledgerly.state import Intent
         ("I was charged a fee I don't understand", Intent.BILLING),
         ("How do I reset my password?", Intent.HOW_TO),
         ("What are the transfer limits?", Intent.PRODUCT),
+        ("What are my transfer limits?", Intent.PRODUCT),
+        ("How do I freeze my card?", Intent.HOW_TO),
+        ("How do I unfreeze my card?", Intent.HOW_TO),
+        ("How do I cancel my card?", Intent.HOW_TO),
+        ("How can I check my wallet?", Intent.ACCOUNT),
         ("What's my balance?", Intent.ACCOUNT),
         ("This app is terrible and not working", Intent.COMPLAINT),
         ("asdf qwerty zzz", Intent.UNKNOWN),
@@ -67,3 +72,17 @@ def test_intent_shift_mid_conversation(conversation):
     state = conversation("What's my balance?")
     assert state["intent_history"] == ["how_to", "account"]
     assert state["messages"][-1].agent == "account"
+
+
+@pytest.mark.parametrize("question, intent, agent", [
+    ("What are my transfer limits?", "product", "kb"),
+    ("How do I freeze my card?", "how_to", "mock_vendor_llm"),
+])
+def test_task_requests_do_not_return_an_account_snapshot(conversation, question, intent, agent):
+    state = conversation(question)
+    assert state["current_intent"] == intent
+    assert state["messages"][-1].agent == agent
+    assert "4821" not in state["messages"][-1].content
+    assert "recent transactions" not in state["messages"][-1].content
+    if intent == "product":
+        assert "2,500 USD" in state["messages"][-1].content

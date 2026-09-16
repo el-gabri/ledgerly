@@ -1,10 +1,10 @@
 """Structured JSON logging for orchestration decisions.
 
-Every routing decision, agent invocation, gate evaluation, and state
-transition emits one JSON line keyed by conversation_id/turn. This is the
-same information a LangSmith trace would carry, without the external
-dependency; LangSmith can be enabled on top via the standard
-LANGCHAIN_TRACING_V2 env vars since the graph is plain LangGraph.
+Routing decisions, responder outcomes, gate evaluations, and handoffs emit
+JSON records. Calls with graph state include conversation_id/turn; backend
+and index initialization failures may not have conversation context.
+State transitions are separate checkpointed records exposed by /trace.
+Optional LangSmith tracing can be enabled through its environment settings.
 """
 from __future__ import annotations
 

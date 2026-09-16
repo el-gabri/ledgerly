@@ -12,10 +12,12 @@ import unicodedata
 
 from .state import Intent
 
+_APOSTROPHES = str.maketrans({"\u2018": "'", "\u2019": "'", "\u02bc": "'"})
+
 
 def _normalize(text: str) -> str:
-    """Case-fold text and remove accents so policy works across supported locales."""
-    decomposed = unicodedata.normalize("NFKD", text.casefold())
+    """Normalize case, accents, and common apostrophes before policy matching."""
+    decomposed = unicodedata.normalize("NFKD", text.casefold().translate(_APOSTROPHES))
     return "".join(char for char in decomposed if not unicodedata.combining(char))
 
 

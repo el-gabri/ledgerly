@@ -7,6 +7,8 @@ prompt you can only hope about.
 """
 from __future__ import annotations
 
+import re
+
 from .llm import LLMBackend, detect_frustration
 from .logging_utils import log_event
 from .policy import apply_policy_rules
@@ -41,6 +43,16 @@ _MENU_SELECTIONS = {
     "4": Intent.PRODUCT,
 }
 
+# A category supplies context for short topic replies, but does not make
+# arbitrary text a substantive request. Explicitly classified intent shifts
+# always take precedence over this narrow follow-up vocabulary.
+_CATEGORY_TOPICS = {
+    Intent.BILLING.value: r"\b(?:duplicates?|refunds?|invoices?|billing|fees?)\b",
+    Intent.ACCOUNT.value: r"\b(?:balance|transactions?|payments?|transfers?|statements?|deposits?|card|wallet)\b",
+    Intent.HOW_TO.value: r"\b(?:passwords?|transfers?|closing|close|delete)\b",
+    Intent.PRODUCT.value: r"\b(?:limits?|countries|currencies|exchange rates?)\b",
+}
+
 
 def _menu_selection_intent(state: OrchestratorState, text: str) -> Intent | None:
     if not state.get("awaiting_menu_selection"):
@@ -69,6 +81,11 @@ def make_router_node(backend: LLMBackend):
             "menu_selection" if menu_intent else
             backend.name
         )
+        selected_category = state.get("selected_category")
+        if intent is Intent.UNKNOWN and selected_category in _CATEGORY_TOPICS:
+            if re.search(_CATEGORY_TOPICS[selected_category], text, re.IGNORECASE):
+                intent = Intent(selected_category)
+                decided_by = "selected_category"
 
         update: dict = {
             "conv_state": ConvState.ROUTING.value,
@@ -76,6 +93,10 @@ def make_router_node(backend: LLMBackend):
             "current_intent": intent.value,
             "intent_history": [intent.value],
             "awaiting_menu_selection": False,
+            "selected_category": (
+                menu_intent.value if menu_intent else
+                selected_category if intent is Intent.UNKNOWN else None
+            ),
         }
 
         # Frustration is tracked independently of intent: an angry message
@@ -94,7 +115,9 @@ def make_router_node(backend: LLMBackend):
                 "user explicitly asked for a human agent",
             )
         else:
-            update["active_agent"] = _INTENT_TO_AGENT[intent]
+            # Choosing a category is progress, not a concrete question for
+            # an agent. The concierge asks for the missing details first.
+            update["active_agent"] = "concierge" if menu_intent else _INTENT_TO_AGENT[intent]
 
         log_event(
             "routing_decision", state,

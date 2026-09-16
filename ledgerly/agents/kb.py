@@ -11,6 +11,7 @@ from __future__ import annotations
 import math
 import re
 from collections import Counter
+from importlib.resources import files
 from pathlib import Path
 
 from ..config import KB_TOP_K, KB_WEAK_SCORE, embeddings_mode
@@ -24,8 +25,6 @@ from ..state import (
     last_user_message,
     transition,
 )
-
-_DATA_DIR = Path(__file__).resolve().parent.parent.parent / "data" / "kb_docs"
 
 _STOPWORDS = frozenset(
     "a an and are as at be by can do does for from how i in is it my of on or "
@@ -75,20 +74,40 @@ class KnowledgeBaseAgent:
 
     name = "kb"
 
-    def __init__(self, backend: LLMBackend, docs_dir: Path = _DATA_DIR) -> None:
+    def __init__(self, backend: LLMBackend, docs_dir: Path | None = None) -> None:
         self._backend = backend
-        self._docs = {p.stem: p.read_text(encoding="utf-8") for p in sorted(docs_dir.glob("*.md"))}
+        source = (docs_dir if docs_dir is not None else
+                  files("ledgerly").joinpath("data").joinpath("kb_docs"))
+        self._docs = {
+            p.name[:-3]: p.read_text(encoding="utf-8")
+            for p in sorted(source.iterdir(), key=lambda p: p.name)
+            if p.is_file() and p.name.endswith(".md")
+        }
+        # Keep the dependency-free index ready for failures during query encoding
+        # as well as during optional model initialization.
+        self._tfidf_index = TfIdfIndex(self._docs)
+        self._index = self._tfidf_index
         if embeddings_mode() == "st":
-            try:  # optional dense-embedding path; falls back silently to TF-IDF
+            try:
                 self._index = _SentenceTransformerIndex(self._docs)
             except Exception as exc:  # noqa: BLE001
-                log_event("kb_embeddings_fallback", error=str(exc))
-                self._index = TfIdfIndex(self._docs)
-        else:
-            self._index = TfIdfIndex(self._docs)
+                self._log_embeddings_fallback(exc, stage="initialization")
+
+    @staticmethod
+    def _log_embeddings_fallback(exc: Exception, stage: str) -> None:
+        # Dependency exception messages can echo the query; log safe metadata only.
+        log_event("kb_embeddings_fallback", dependency="sentence_transformers",
+                  stage=stage, error_type=type(exc).__name__, fallback="tfidf")
 
     def answer(self, query: str) -> DraftReply:
-        hits = self._index.search(query, KB_TOP_K)
+        try:
+            hits = self._index.search(query, KB_TOP_K)
+        except Exception as exc:  # noqa: BLE001 — only the optional dependency degrades
+            if self._index is self._tfidf_index:
+                raise
+            self._log_embeddings_fallback(exc, stage="search")
+            self._index = self._tfidf_index
+            hits = self._index.search(query, KB_TOP_K)
         top_id, top_score = hits[0] if hits else ("", 0.0)
 
         if not hits or top_score < KB_WEAK_SCORE:
@@ -101,9 +120,11 @@ class KnowledgeBaseAgent:
             )
 
         doc = self._docs[top_id]
-        # Offline fallback: first content paragraph of the best-matching doc.
-        paragraphs = [p.strip() for p in doc.split("\n\n") if p.strip() and not p.startswith("#")]
-        fallback = paragraphs[0] if paragraphs else doc.strip()
+        # These are short articles: retain all supporting body text, including
+        # later paragraphs that may directly answer the customer's question.
+        fallback = "\n".join(
+            line for line in doc.splitlines() if not re.match(r"^\s{0,3}#{1,6}\s", line)
+        ).strip()
 
         content = self._backend.generate(
             system=("You are Ledgerly's internal support assistant. Answer ONLY "

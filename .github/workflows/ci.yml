@@ -28,3 +28,5 @@ jobs:
         run: python -m compileall -q ledgerly
       - name: Run tests
         run: python -m pytest tests -q
+      - name: Verify the installed wheel outside the checkout
+        run: python scripts/check_wheel.py

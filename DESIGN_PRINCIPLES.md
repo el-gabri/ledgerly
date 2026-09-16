@@ -5,11 +5,11 @@ for a team: each rule exists to make a specific failure mode harder.
 
 ## 1. Policy must be auditable
 
-Escalation triggers, restricted-intent rules, and confidence thresholds are
-deterministic code in exactly two files (`router.py` rule layer, `gate.py`),
-with every tunable in `config.py`. When compliance asks "can the AI ever
-handle a fraud claim?", the answer is a regex you can point at, not a prompt
-you can only hope about.
+Restricted-intent rules live in `policy.py`, dispatch in `router.py`, and
+ordered response escalation in `gate.py`, with thresholds in `config.py`.
+The supported fraud/legal patterns run before classification. A matched
+restricted turn also skips inference during handoff summarization. Tests
+guard the actual backend and responder calls, not just graph state names.
 
 ## 2. One checkpoint, not scattered checks
 
@@ -34,39 +34,40 @@ The point of a prototype is to prove the seams, not to fake the scale.
 
 ## 4. The state schema is a contract, not a convenience
 
-`state.py` is the one shared surface between all agents. Agents read shared
-state but write only their own fields; the vendor gets a redacted,
-PII-scrubbed projection, never the raw state. Changing `state.py` is a design
-review, not a diff —
-in a real team this file would have mandatory codeowner review.
+`state.py` defines the shared TypedDict and dataclass values. Sequential
+responders update the shared draft and append durable attempt records;
+intake resets scratch fields between turns. The vendor receives a filtered
+projection that excludes account-agent replies and redacts supported PII
+patterns. State changes must preserve reducers and checkpoint behavior.
 
 ## 5. Degrade, never crash a conversation
 
-A support conversation must survive every dependency failure: vendor timeout
-falls back to an internal agent; a broken optional mode (OpenAI key missing,
-embeddings unavailable) falls back to offline behavior; and when nothing can
-answer confidently, the failure mode is a *warm human handoff*, not an error
-message. `except Exception` is allowed only at these degradation boundaries,
-and always logs.
+Vendor exceptions and structured failures enter the KB fallback. Optional
+OpenAI initialization/call failures use offline behavior, and dense retrieval
+initialization/search failures switch to TF-IDF. A weak vendor fallback
+produces a warm human handoff. Broad exception handling stays at dependency
+boundaries and records the recovery path; unexpected graph errors remain visible.
 
 ## 6. Every decision leaves a trace
 
-Routing choices, gate evaluations, vendor invocations (including what was
-redacted), and state transitions each emit one structured log line with
-`conversation_id` and `turn`. The test for sufficiency: can you answer "why
-did conversation X escalate?" from logs alone? (`/trace` in the CLI is this
-question as a feature.)
+Routing choices, gate evaluations, vendor invocations, responder outcomes,
+and handoffs emit structured decision logs. Records supplied with graph state
+include `conversation_id` and `turn`; dependency records can lack that context.
+State transitions are checkpointed separately with reasons and timestamps;
+`/trace` prints that conversation history. Vendor audit metadata reports
+actual account-message omissions and matched redaction types.
 
 ## 7. Deterministic by default, stochastic by opt-in
 
-Tests and demos run with zero network and zero randomness. LLM inference is
-an opt-in enhancement behind a flag. This inverts the common failure mode of
-LLM demos (flaky live calls, untestable behavior) and is the property that
-makes the 32-test suite meaningful.
+Tests force offline generation, TF-IDF retrieval, and disabled tracing;
+optional dependency failures are exercised with stubs. Demos default to
+offline behavior. Decisions and reply text are deterministic; conversation
+IDs and timestamps vary. The wheel smoke check also runs offline outside the
+checkout to verify the installed resources.
 
 ## 8. Comments explain why, names explain what
 
 Docstrings state the design intent of a module (often pointing at the design
 doc section they implement). Inline comments are reserved for non-obvious
-decisions — trigger ordering, why UNKNOWN routes to the vendor, why the
+decisions — trigger ordering, why UNKNOWN routes to concierge, why the
 streak counts the current draft.

@@ -8,8 +8,8 @@ Two design points matter here:
    mock is the only live implementation in this demo, but the seam is real.
 
 2. **The projection is a security boundary.** The vendor never receives the
-   full graph state — only the transcript and the current intent. Account
-   data, retrieval internals, and orchestration metadata stay inside.
+   full graph state — only a filtered transcript, intent, and safe redaction
+   metadata. Internal account replies are omitted before pattern filtering.
 """
 from __future__ import annotations
 
@@ -27,7 +27,6 @@ from ..state import (
     Intent,
     OrchestratorState,
     VendorFailure,
-    last_user_message,
     transition,
 )
 
@@ -39,6 +38,7 @@ class VendorProjection:
     transcript: list[dict] = field(default_factory=list)  # [{role, content}]
     intent: str = "unknown"
     redaction_types: list[str] = field(default_factory=list)
+    excluded_message_counts: dict[str, int] = field(default_factory=dict)
 
 
 @dataclass
@@ -92,11 +92,15 @@ _UNKNOWN_TEMPLATE = (
 # message leaves Ledgerly. New vendor integrations must use this projection
 # rather than the graph state directly.
 _CARD_NUMBER_RE = re.compile(r"(?<![\d+])(?:\d[ -]?){13,19}(?!\d)")
+# Match a complete plus-prefixed international number with 8-15 digits.
+# Apply before CPF/card patterns: an 11-digit international number can also
+# look like a CPF when its leading plus is ignored.
+_INTERNATIONAL_PHONE_RE = re.compile(r"(?<![\w+])\+[1-9]\d{7,14}(?!\w)")
 _PII_PATTERNS: tuple[tuple[str, re.Pattern[str]], ...] = (
     ("cpf", re.compile(r"(?<!\d)\d{3}\.?\d{3}\.?\d{3}-?\d{2}(?!\d)")),
     ("email", re.compile(r"\b[A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,}\b", re.IGNORECASE)),
     ("phone", re.compile(
-        r"(?<!\d)(?:\+?\d{1,3}[ .-]?)?(?:\(?\d{2,3}\)?[ .-]?)?\d{4,5}[ .-]\d{4}(?!\d)"
+        r"(?<!\d)(?:\+?\d{1,3}[ .-]?)?(?:\(?\d{2,3}\)?[ .-]?)?\d{3,5}[ .-]\d{4}(?!\d)"
     )),
 )
 
@@ -115,9 +119,13 @@ def _passes_luhn(digits: str) -> bool:
 
 
 def redact_pii(text: str) -> tuple[str, list[str]]:
-    """Replace common PII in vendor-bound text and report safe type labels."""
+    """Filter supported PII patterns; this is not complete anonymization."""
     redacted = text
     found: list[str] = []
+
+    if _INTERNATIONAL_PHONE_RE.search(redacted):
+        found.append("phone")
+        redacted = _INTERNATIONAL_PHONE_RE.sub("[REDACTED_PHONE]", redacted)
 
     def redact_card(match: re.Match[str]) -> str:
         digits = re.sub(r"\D", "", match.group())
@@ -129,7 +137,8 @@ def redact_pii(text: str) -> tuple[str, list[str]]:
     redacted = _CARD_NUMBER_RE.sub(redact_card, redacted)
     for pii_type, pattern in _PII_PATTERNS:
         if pattern.search(redacted):
-            found.append(pii_type)
+            if pii_type not in found:
+                found.append(pii_type)
             redacted = pattern.sub(f"[REDACTED_{pii_type.upper()}]", redacted)
     return redacted, found
 
@@ -179,8 +188,12 @@ def build_projection(state: OrchestratorState) -> VendorProjection:
     """Redact graph state down to what the vendor is allowed to see."""
     transcript: list[dict] = []
     redaction_types: set[str] = set()
+    excluded_message_counts: dict[str, int] = {}
     for message in state.get("messages", []):
         if message.role not in ("user", "assistant"):
+            continue
+        if message.role == "assistant" and message.agent == "account":
+            excluded_message_counts["account"] = excluded_message_counts.get("account", 0) + 1
             continue
         content, found = redact_pii(message.content)
         transcript.append({"role": message.role, "content": content})
@@ -189,6 +202,7 @@ def build_projection(state: OrchestratorState) -> VendorProjection:
         transcript=transcript,
         intent=state.get("current_intent", "unknown"),
         redaction_types=sorted(redaction_types),
+        excluded_message_counts=excluded_message_counts,
     )
 
 
@@ -199,19 +213,38 @@ def make_vendor_node(adapter: VendorAdapter):
         chaos = state.get("chaos")
         projection = build_projection(state)
         log_event("vendor_invoked", state, adapter=adapter.name,
-                  redacted_fields=["account_data", "retrieval_context", "orchestration_metadata"],
+                  projection_fields=["transcript", "intent"],
+                  excluded_message_counts=projection.excluded_message_counts,
                   pii_redaction_types=projection.redaction_types,
                   chaos=chaos)
 
-        result = adapter.invoke(projection, chaos=chaos)
+        failure_source = "result"
+        exception_type = None
+        try:
+            result = adapter.invoke(projection, chaos=chaos)
+        except Exception as exc:  # dependency boundary: retain the KB recovery path
+            failure_source = "exception"
+            exception_type = type(exc).__name__
+            result = VendorResult(ok=False, failure=VendorFailure(
+                kind="timeout" if isinstance(exc, TimeoutError) else "error",
+                detail="vendor adapter raised an exception",
+            ))
+        if not result.ok and result.failure is None:
+            failure_source = "incomplete_result"
+            result = VendorResult(ok=False, failure=VendorFailure(
+                kind="error", detail="vendor adapter returned failure without details",
+            ))
         events = [transition(state.get("conv_state", "ROUTING"), ConvState.AGENT_ACTIVE,
                              f"dispatched to {adapter.name}")]
 
         if not result.ok:
             events.append(transition(ConvState.AGENT_ACTIVE.value, ConvState.FALLBACK,
                                      f"vendor failure: {result.failure.kind}"))
-            log_event("vendor_failure", state, kind=result.failure.kind,
-                      detail=result.failure.detail)
+            # Adapter error messages may include customer text or credentials.
+            # Log safe classifications only, including the recovery destination.
+            log_event("vendor_failure", state, adapter=adapter.name,
+                      kind=result.failure.kind, failure_source=failure_source,
+                      exception_type=exception_type, recovery="kb")
             return {
                 "conv_state": ConvState.FALLBACK.value,
                 "events": events,

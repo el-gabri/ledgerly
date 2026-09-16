@@ -17,7 +17,7 @@ flowchart TD
     R -->|billing, how-to, complaint| V["Vendor AI agent<br/>sees redacted projection only"]
     R -->|product question| K["KB agent<br/>RAG over support docs"]
     R -->|account question| A["Account agent<br/>internal data, never shared with vendor"]
-    R -->|greeting or unclear| C["Concierge<br/>hello / capability menu"]
+    R -->|greeting, unclear, or menu selection| C["Concierge<br/>hello / clarification"]
 
     V -->|reply + confidence| G
     V -->|timeout or failure| F["Fallback<br/>mark vendor attempt failed"]
@@ -39,8 +39,13 @@ flowchart TD
 4. `user_frustration` — two frustration signals across the conversation
 5. `turn_limit` — conversation exceeded the turn budget unresolved
 
-(Restricted intents and explicit human requests escalate at the router,
-before any AI agent runs — they never reach the gate.)
+Restricted intents and explicit human requests bypass responders and the
+gate. Restricted handoffs also skip generation during summarization;
+other handoffs may use the configured backend to summarize the transcript.
+
+A valid numbered menu choice asks for a concrete question in that category
+and resets the weak-response streak. Unclear follow-ups still count as weak;
+explicit intent shifts can move the conversation to another category.
 
 ## Conversation state machine
 
@@ -57,10 +62,12 @@ stateDiagram-v2
     GATING --> ESCALATING: trigger fired
     RESPONDED --> INTAKE: next user turn
     ESCALATING --> HUMAN_ACTIVE: context package delivered
-    HUMAN_ACTIVE --> RESOLVED
-    RESPONDED --> RESOLVED
-    RESOLVED --> [*]
 ```
 
-Every transition is appended to the event log with a reason — `/trace` in
-the CLI replays it for the current conversation.
+`RESOLVED` is reserved in the enum; no resolution operation is implemented.
+Human-active turns update the case and send a fixed receipt without new
+transitions or inference. The graph also records intake/fallback self-markers.
+
+Transitions are appended to the checkpointed event history with a reason and
+timestamp; `/trace` prints that history. Structured decision logs are separate
+and do not contain one record per transition.

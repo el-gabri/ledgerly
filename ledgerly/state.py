@@ -1,9 +1,9 @@
 """Typed conversation state shared by every node in the orchestration graph.
 
 This module is the "context contract" described in DESIGN_DOC.md section 4:
-a single typed state object flows through the graph, and every agent reads
-from it but writes only its own fields. Changing this file is a design
-decision, not a casual diff.
+a single typed state object flows through the graph. Sequential responders
+replace the shared draft and append durable attempt records. Changes must
+preserve reducers and checkpoint behavior across turns.
 """
 from __future__ import annotations
 
@@ -132,6 +132,7 @@ class OrchestratorState(TypedDict, total=False):
     escalation: Optional[Escalation]
     human_active: bool
     awaiting_menu_selection: bool
+    selected_category: Optional[str]  # pending category until a concrete question
     # -- per-turn scratch fields (reset at intake) ------------------------
     current_intent: Optional[str]
     active_agent: Optional[str]

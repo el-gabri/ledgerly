@@ -72,11 +72,14 @@ def build_package(state: OrchestratorState, trigger: str, reason: str,
         f"Intents seen: {', '.join(intents) or 'none'}. "
         f"Escalated because: {reason}."
     )
-    summary = backend.generate(
-        system="Summarize this support conversation for the human agent taking over. Two sentences, factual.",
-        prompt="\n".join(f"{m['role']}: {m['content']}" for m in transcript),
-        fallback=fallback_summary,
-    )
+    # Restricted turns must bypass inference, including handoff summarization.
+    summary = fallback_summary
+    if trigger != "restricted_intent":
+        summary = backend.generate(
+            system="Summarize this support conversation for the human agent taking over. Two sentences, factual.",
+            prompt="\n".join(f"{m['role']}: {m['content']}" for m in transcript),
+            fallback=fallback_summary,
+        )
 
     return {
         "summary": summary,

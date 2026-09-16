@@ -1,6 +1,8 @@
 """Concierge: greetings and clarification menus."""
 from __future__ import annotations
 
+import pytest
+
 from ledgerly.llm import OfflineBackend
 from ledgerly.state import Intent
 
@@ -41,16 +43,65 @@ def test_unclear_intent_gets_capability_menu(conversation):
     assert state["low_confidence_streak"] == 1
 
 
-def test_menu_selection_routes_without_an_unnecessary_handoff(conversation):
+@pytest.mark.parametrize("choice, intent", [
+    ("1", "billing"), ("2", "account"), ("3", "how_to"), ("4", "product"),
+])
+def test_menu_selection_routes_without_an_unnecessary_handoff(conversation, choice, intent):
     """A numbered answer to the displayed menu is valid user context."""
     state = conversation("GABRIEL")
     assert state["awaiting_menu_selection"] is True
 
-    state = conversation("1")
-    assert state["current_intent"] == "billing"
-    assert state["messages"][-1].agent == "mock_vendor_llm"
+    state = conversation(choice)
+    assert state["current_intent"] == intent
+    assert state["selected_category"] == intent
+    assert state["messages"][-1].agent == "concierge"
+    assert "?" in state["messages"][-1].content
     assert state["low_confidence_streak"] == 0
     assert state.get("human_active") is not True
+
+
+@pytest.mark.parametrize("choice, question, agent, answer", [
+    ("2", "transactions please", "account", "Grocery Mart"),
+    ("2", "What's my balance?", "account", "1,284.50"),
+    ("4", "countries please", "kb", "Source: supported-countries"),
+    ("4", "What are the transfer limits?", "kb", "2,500 USD"),
+])
+def test_menu_category_supports_a_concrete_followup(conversation, choice, question, agent, answer):
+    conversation("GABRIEL")
+    conversation(choice)
+    state = conversation(question)
+    assert state["conv_state"] == "RESPONDED"
+    assert state["messages"][-1].agent == agent
+    assert answer in state["messages"][-1].content
+    assert state["selected_category"] is None
+
+
+def test_selected_category_does_not_override_an_intent_shift(conversation):
+    conversation("GABRIEL")
+    conversation("2")
+    state = conversation("What are the transfer limits?")
+    assert state["current_intent"] == "product"
+    assert state["messages"][-1].agent == "kb"
+    assert state["selected_category"] is None
+
+
+def test_unclear_followups_after_menu_selection_still_escalate(conversation):
+    conversation("GABRIEL")
+    conversation("2")
+    state = conversation("zxcv mumble jumble")
+    assert state["selected_category"] == "account"
+    assert state["low_confidence_streak"] == 1
+    state = conversation("qwerty flibber jabber")
+    assert state["escalation"].trigger == "low_confidence"
+
+
+def test_weak_substantive_answers_after_menu_selection_still_escalate(conversation):
+    conversation("GABRIEL")
+    conversation("4")
+    state = conversation("What is zxcv qwerty?")
+    assert state["low_confidence_streak"] == 1
+    state = conversation("What is flibber jabber?")
+    assert state["escalation"].trigger == "low_confidence"
 
 
 def test_wallet_question_routes_to_account_agent(conversation):

@@ -13,7 +13,7 @@ dependencies = [
 ]
 
 [project.optional-dependencies]
-dev = ["pytest>=8,<10"]
+dev = ["pytest>=8,<10", "setuptools>=68", "wheel"]
 openai = ["openai>=1.40"]
 embeddings = ["sentence-transformers>=3"]
 
@@ -23,3 +23,7 @@ addopts = "-q"
 
 [tool.setuptools.packages.find]
 include = ["ledgerly*"]
+namespaces = false
+
+[tool.setuptools.package-data]
+ledgerly = ["data/accounts.json", "data/kb_docs/*.md"]

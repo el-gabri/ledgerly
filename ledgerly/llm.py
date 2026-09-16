@@ -34,10 +34,12 @@ class LLMBackend(Protocol):
 # Ordered list: first matching intent wins. Policy-critical intents are
 # deliberately absent: they are owned by ``policy.py`` and run first.
 _INTENT_PATTERNS: list[tuple[Intent, list[str]]] = [
+    (Intent.PRODUCT, ["transfer limit"]),
     # Task-shaped phrases that would otherwise be shadowed by the possessive
     # ACCOUNT patterns below ("close MY ACCOUNT" is a how-to, not a lookup).
     (Intent.HOW_TO, [
         "close my account", "delete my account", "reset my password",
+        "freeze my card", "unfreeze my card", "cancel my card",
     ]),
     (Intent.ACCOUNT, [
         "my balance", "balance", "my account", "my transaction", "my card",
